@@ -1,128 +1,162 @@
 # coding=utf-8
-# author=左懒
+# author=veficos
+
+import decimal
 
 
-import re
-from pypeg2 import *
+class IntegerConstantNode(int):
+    def eval(self, env):
+        return self
 
 
-# Integer Constant
-class DecimalConstant(Literal):
-    grammar = re.compile(r'[1-9][0-9]*')
-
-    def eval(self):
-        return int(str(self), 10)
+class DecimalConstantNode(decimal.Decimal):
+    def eval(self, env):
+        return self
 
 
-class OctalConstant(Literal):
-    grammar = re.compile(r'0[0-7]*')
+class BoolConstantNode(object):
+    def __init__(self, value):
+        self.value = value
 
-    def eval(self):
-        return int(str(self), 8)
+    def eval(self, env):
+        return bool(self.value)
 
+    def __le__(self, other):
+        return self.value <= other.value
 
-class HexadecimalConstant(Literal):
-    grammar = re.compile(r'0[xX][0-9a-fA-F]+')
+    def __lt__(self, other):
+        return self.value < other.value
 
-    def eval(self):
-        return int(str(self), 16)
+    def __ge__(self, other):
+        return self.value >= other.value
 
-IntegerConstant = [
-    HexadecimalConstant,
-    OctalConstant,
-    DecimalConstant,
-]
+    def __gt__(self, other):
+        return self.value > other.value
 
+    def __eq__(self, other):
+        return self.value == other.value
 
-# Float Constant
-floating_suffix = r'[flFL]'
+    def __ne__(self, other):
+        return self.value != other.value
 
-binary_exponent_part = r'([pP][+\-]?[0-9]+)'
+    def __and__(self, other):
+        return self.value and other.value
 
-hexadecimal_fractional_constant = r'([0-9a-fA-F]*\.[0-9a-fA-F]+)'
+    def __or__(self, other):
+        return self.value or other.value
 
-exponent_part = r'(E[+\-]?[0-9]+)'
-
-fractional_constant = r'([0-9]*\.[0-9]+|[0-9]+\.)'
-
-
-class HexadecimalFloatingConstant(Literal):
-    grammar = re.compile(r'(0[xX]' + hexadecimal_fractional_constant +
-                         binary_exponent_part + floating_suffix + r'?)|' +
-                         r'(0[xX][0-9a-fA-F]+' + binary_exponent_part + floating_suffix + r'?)')
-
-    def eval(self):
-        return float(str(self))
+    def versa(self):
+        return not self.value
 
 
-class DecimalFloatingConstant(Literal):
-    grammar = re.compile(r'(' + fractional_constant + exponent_part + r'?' +
-                         floating_suffix + r'?)|' '([0-9]+' + exponent_part +
-                         floating_suffix + r'?)')
+class NilConstantNode(object):
+    def __init__(self, value):
+        pass
 
-    def eval(self):
-        return float(str(self))
-
-FloatingConstant = [
-    HexadecimalFloatingConstant,
-    DecimalFloatingConstant,
-]
+    def eval(self, env):
+        return None
 
 
-# Constant
-Constant = [
-    FloatingConstant,
-    IntegerConstant,
-]
+class StringConstantNode(str):
+    def eval(self, env):
+        return self
 
 
-# Primary expression
-PrimaryExpression = [
-    Constant,
-]
+class SymbolNode(str):
+    def eval(self, env):
+        return self
+
+class PostfixNode(object):
+    def __init__(self, obj, other):
+        self.obj = obj
+        self.other = other
+
+    def eval(self, env):
+        return self.obj.eval(None), self.other
 
 
-class Multiply(List):
-    def eval(self):
-        return self[0].eval() * self[1].eval()
+class NegativeNode(object):
+    def __init__(self, value):
+        self.value = value
+
+    def eval(self, env):
+        return self.value
 
 
-class Divide(List):
-    def eval(self):
-        return self[0].eval() / self[1].eval()
+class NotNode(object):
+    def __init__(self, value):
+        self.value = value
+
+    def eval(self, env):
+        return self.value
 
 
-class IntegerDivide(List):
-    def eval(self):
-        return self[0].eval() % self[1].eval()
-
-MultiplicativeExpression = [
-    Multiply,
-    Divide,
-    IntegerDivide,
-    PrimaryExpression
-]
-
-Multiply.grammar = PrimaryExpression, blank, "*", blank, MultiplicativeExpression
-Divide.grammar = PrimaryExpression, blank, "/", blank, MultiplicativeExpression
-IntegerDivide.grammar = PrimaryExpression, blank, "%", blank, MultiplicativeExpression
+class BinaryNode(object):
+    def __init__(self, lhs, rhs):
+        self.lhs = lhs
+        self.rhs = rhs
 
 
-class Add(List):
-    def eval(self):
-        return self[0].eval() + self[1].eval()
+class MultiplyNode(BinaryNode):
+    def eval(self, env):
+        return self.lhs, self.rhs
 
 
-class Subtract(List):
-    def eval(self):
-        return self[0].eval() + self[1].eval()
-
-AdditiveExpression = [Add, Subtract, MultiplicativeExpression]
-Add.grammar = MultiplicativeExpression, blank, "+", blank, AdditiveExpression
-Subtract.grammar = MultiplicativeExpression, blank, "-", blank, AdditiveExpression
+class DivideNode(BinaryNode):
+    def eval(self, env):
+        return self.lhs, self.rhs
 
 
-while True:
-    text = input()
-    ast = parse(text, AdditiveExpression)
-    print(ast.eval())
+class IntegerDivideNode(BinaryNode):
+    def eval(self, env):
+        return self.lhs, self.rhs
+
+
+class AddNode(BinaryNode):
+    def eval(self, env):
+        return self.lhs, self.rhs
+
+
+class SubtractNode(BinaryNode):
+    def eval(self, env):
+        return self.lhs, self.rhs
+
+
+class LessOrEqualNode(BinaryNode):
+    def eval(self, env):
+        return self.lhs, self.rhs
+
+
+class GreaterOrEqualNode(BinaryNode):
+    def eval(self, env):
+        return self.lhs, self.rhs
+
+
+class LessThanNode(BinaryNode):
+    def eval(self, env):
+        return self.lhs, self.rhs
+
+
+class GreaterThanNode(BinaryNode):
+    def eval(self, env):
+        return self.lhs, self.rhs
+
+
+class EqualNode(BinaryNode):
+    def eval(self, env):
+        return self.lhs, self.rhs
+
+
+class UnequalNode(BinaryNode):
+    def eval(self, env):
+        return self.lhs, self.rhs
+
+
+class LogicalAndNode(BinaryNode):
+    def eval(self, env):
+        return self.lhs, self.rhs
+
+
+class LogicalOrNode(BinaryNode):
+    def eval(self, env):
+        return self.lhs, self.rhs
