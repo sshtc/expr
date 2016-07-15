@@ -19,22 +19,38 @@ def is_constant(expr):
     ]))
 
 
+def is_object(expr):
+    return any(map(lambda x: isinstance(expr, x), [
+        SymbolNode,
+        FunctionCallObjectNode,
+        SubscriptNode,
+        MemberObjectNode,
+    ]))
+
+
+def repair_prefix(lhs, rhs, expression):
+    if isinstance(rhs, expression):
+        l = expression(lhs, rhs[0])
+        return repair_prefix(l, rhs[1], expression)
+    return expression(lhs, rhs)
+
+
 def binary_constant_folding(op, lhs, rhs):
     ops = {
-        '+': lambda: lhs + rhs,
-        '-': lambda: lhs - rhs,
-        '*': lambda: lhs * rhs,
-        '/': lambda: lhs / rhs,
-        '%': lambda: lhs % rhs,
+        '+': lambda: lhs.value + rhs.value,
+        '-': lambda: lhs.value - rhs.value,
+        '*': lambda: lhs.value * rhs.value,
+        '/': lambda: lhs.value / rhs.value,
+        '%': lambda: lhs.value % rhs.value,
 
-        '==': lambda: lhs == rhs,
-        '!=': lambda: lhs != rhs,
-        '>=': lambda: lhs >= rhs,
-        '<=': lambda: lhs <= rhs,
-        '>': lambda: lhs > rhs,
-        '<': lambda: lhs < rhs,
-        '||': lambda: lhs or rhs,
-        '&&': lambda: lhs and rhs,
+        '==': lambda: lhs.value == rhs.value,
+        '!=': lambda: lhs.value != rhs.value,
+        '>=': lambda: lhs.value.value >= rhs.value,
+        '<=': lambda: lhs.value <= rhs.value,
+        '>': lambda: lhs.value > rhs.value,
+        '<': lambda: lhs.value < rhs.value,
+        '||': lambda: lhs.value or rhs.value,
+        '&&': lambda: lhs.value and rhs.value,
     }
 
     result = ops[op]()
@@ -46,6 +62,7 @@ def binary_constant_folding(op, lhs, rhs):
         return IntegerConstantNode(result)
     elif isinstance(result, str):
         return StringConstantNode(result)
+    return NilConstantNode(None)
 
 
 class Plain(object):
@@ -150,7 +167,7 @@ class NilConstantExpression(Literal):
         return None
 
     def constant_folding(self):
-        return NilConstantNode(self.to_value())
+        return NilConstantNode(None)
 
 
 class StringConstantExpression(Literal):
@@ -212,17 +229,17 @@ class MemberExpression(Plain):
     grammar = '.', name()
 
     def constant_folding(self):
-        return SymbolNode(self.name)
+        return MemberNode(self.name)
 
 
 class FunctionCallExpression(List):
     def constant_folding(self):
-        return list(map(lambda x: x.constant_folding(), self))
+        return FunctionArgsNode(list(map(lambda x: x.constant_folding(), self)))
 
 
 class SubscriptExpression(List):
     def constant_folding(self):
-        return self[0].constant_folding()
+        return SubscriptNode(self[0].constant_folding())
 
 _postfix = [
     MemberExpression,
@@ -235,7 +252,14 @@ class PostfixExpression(List):
     grammar = [IdentifierExpression], some(_postfix)
 
     def constant_folding(self):
-        return reduce(lambda x, y: PostfixNode(x, y), map(lambda x: x.constant_folding(), self))
+        def error():
+            raise Exception('undefined object')
+
+        return reduce(lambda x, y:
+                      MemberObjectNode(x, y) if any(map(lambda t: isinstance(y, t), [MemberObjectNode, MemberNode])) else \
+                      FunctionCallObjectNode(x, y) if any(map(lambda t: isinstance(y, t), [FunctionCallObjectNode, FunctionArgsNode])) else \
+                      SubscriptObjectNode(x, y) if any(map(lambda t: isinstance(y, t), [SubscriptObjectNode, SubscriptNode])) else error(),
+                      map(lambda x: x.constant_folding(), self))
 
 __postfix_expression = [
     PostfixExpression,
@@ -250,7 +274,7 @@ class NegativeExpression(List):
             return IntegerConstantNode(-value)
         elif isinstance(value, DecimalConstantNode):
             return DecimalConstantNode(-value)
-        return NegativeNode(self[0])
+        return NegativeNode(value)
 
 
 class NotExpression(List):
@@ -260,7 +284,7 @@ class NotExpression(List):
             BoolConstantNode,
         ])):
             return BoolConstantNode(value.versa())
-        return NotNode(self[0])
+        return NotNode(value)
 
 __unary_expression = [
     __postfix_expression,
@@ -274,8 +298,10 @@ NotExpression.grammar = "!", __postfix_expression
 
 class MultiplyExpression(List):
     def constant_folding(self):
-        lhs = self[0].constant_folding()
-        rhs = self[1].constant_folding()
+        lhs, rhs = repair_prefix(self[0], self[1], MultiplyExpression)
+
+        lhs = lhs.constant_folding()
+        rhs = rhs.constant_folding()
         if all([is_constant(lhs), is_constant(rhs)]):
             return binary_constant_folding('*', lhs, rhs)
         return MultiplyNode(lhs, rhs)
@@ -283,8 +309,10 @@ class MultiplyExpression(List):
 
 class DivideExpression(List):
     def constant_folding(self):
-        lhs = self[0].constant_folding()
-        rhs = self[1].constant_folding()
+        lhs, rhs = repair_prefix(self[0], self[1], DivideExpression)
+
+        lhs = lhs.constant_folding()
+        rhs = rhs.constant_folding()
         if all([is_constant(lhs), is_constant(rhs)]):
             return binary_constant_folding('/', lhs, rhs)
         return DivideNode(lhs, rhs)
@@ -292,8 +320,10 @@ class DivideExpression(List):
 
 class IntegerDivideExpression(List):
     def constant_folding(self):
-        lhs = self[0].constant_folding()
-        rhs = self[1].constant_folding()
+        lhs, rhs = repair_prefix(self[0], self[1], IntegerDivideExpression)
+
+        lhs = lhs.constant_folding()
+        rhs = rhs.constant_folding()
         if all([is_constant(lhs), is_constant(rhs)]):
             return binary_constant_folding('%', lhs, rhs)
         return IntegerDivideNode(lhs, rhs)
@@ -312,17 +342,24 @@ IntegerDivideExpression.grammar = __unary_expression, blank, "%", blank, __multi
 
 class AddExpression(List):
     def constant_folding(self):
-        lhs = self[0].constant_folding()
-        rhs = self[1].constant_folding()
+        lhs, rhs = repair_prefix(self[0], self[1], AddExpression)
+
+        lhs = lhs.constant_folding()
+        rhs = rhs.constant_folding()
+
         if all([is_constant(lhs), is_constant(rhs)]):
             return binary_constant_folding('+', lhs, rhs)
+
         return AddNode(lhs, rhs)
 
 
 class SubtractExpression(List):
     def constant_folding(self):
-        lhs = self[0].constant_folding()
-        rhs = self[1].constant_folding()
+        lhs, rhs = repair_prefix(self[0], self[1], SubtractExpression)
+
+        lhs = lhs.constant_folding()
+        rhs = rhs.constant_folding()
+
         if all([is_constant(lhs), is_constant(rhs)]):
             return binary_constant_folding('-', lhs, rhs)
         return SubtractNode(lhs, rhs)
@@ -334,8 +371,10 @@ SubtractExpression.grammar = __multiplicative_expression, blank, "-", blank, __a
 
 class LessOrEqualExpression(List):
     def constant_folding(self):
-        lhs = self[0].constant_folding()
-        rhs = self[1].constant_folding()
+        lhs, rhs = repair_prefix(self[0], self[1], LessOrEqualExpression)
+
+        lhs = lhs.constant_folding()
+        rhs = rhs.constant_folding()
         if all([is_constant(lhs), is_constant(rhs)]):
             return binary_constant_folding('<=', lhs, rhs)
         return LessOrEqualNode(lhs, rhs)
@@ -343,8 +382,10 @@ class LessOrEqualExpression(List):
 
 class GreaterOrEqualExpression(List):
     def constant_folding(self):
-        lhs = self[0].constant_folding()
-        rhs = self[1].constant_folding()
+        lhs, rhs = repair_prefix(self[0], self[1], GreaterOrEqualExpression)
+
+        lhs = lhs.constant_folding()
+        rhs = rhs.constant_folding()
         if all([is_constant(lhs), is_constant(rhs)]):
             return binary_constant_folding('>=', lhs, rhs)
         return GreaterOrEqualNode(lhs, rhs)
@@ -352,9 +393,10 @@ class GreaterOrEqualExpression(List):
 
 class LessThanExpression(List):
     def constant_folding(self):
-        lhs = self[0].constant_folding()
-        rhs = self[1].constant_folding()
-        print('less than')
+        lhs, rhs = repair_prefix(self[0], self[1], LessThanExpression)
+
+        lhs = lhs.constant_folding()
+        rhs = rhs.constant_folding()
         if all([is_constant(lhs), is_constant(rhs)]):
             return binary_constant_folding('<', lhs, rhs)
         return LessThanNode(lhs, rhs)
@@ -362,8 +404,10 @@ class LessThanExpression(List):
 
 class GreaterThanExpression(List):
     def constant_folding(self):
-        lhs = self[0].constant_folding()
-        rhs = self[1].constant_folding()
+        lhs, rhs = repair_prefix(self[0], self[1], GreaterThanExpression)
+
+        lhs = lhs.constant_folding()
+        rhs = rhs.constant_folding()
         if all([is_constant(lhs), is_constant(rhs)]):
             return binary_constant_folding('>', lhs, rhs)
         return GreaterThanNode(lhs, rhs)
@@ -384,8 +428,10 @@ GreaterThanExpression.grammar = __additive_expression, blank, ">", blank, __rela
 
 class EqualExpression(List):
     def constant_folding(self):
-        lhs = self[0].constant_folding()
-        rhs = self[1].constant_folding()
+        lhs, rhs = repair_prefix(self[0], self[1], EqualExpression)
+
+        lhs = lhs.constant_folding()
+        rhs = rhs.constant_folding()
         if all([is_constant(lhs), is_constant(rhs)]):
             return binary_constant_folding('==', lhs, rhs)
         return EqualNode(lhs, rhs)
@@ -393,11 +439,13 @@ class EqualExpression(List):
 
 class UnequalExpression(List):
     def constant_folding(self):
-        lhs = self[0].constant_folding()
-        rhs = self[1].constant_folding()
+        lhs, rhs = repair_prefix(self[0], self[1], UnequalExpression)
+
+        lhs = lhs.constant_folding()
+        rhs = rhs.constant_folding()
         if all([is_constant(lhs), is_constant(rhs)]):
             return binary_constant_folding('!=', lhs, rhs)
-        return LessThanNode(lhs, rhs)
+        return UnequalNode(lhs, rhs)
 
 __equality_expression = [
     EqualExpression,
@@ -411,8 +459,10 @@ UnequalExpression.grammar = __relational_expression, blank, "!=", blank, __equal
 
 class LogicalAndExpression(List):
     def constant_folding(self):
-        lhs = self[0].constant_folding()
-        rhs = self[1].constant_folding()
+        lhs, rhs = repair_prefix(self[0], self[1], LogicalAndExpression)
+
+        lhs = lhs.constant_folding()
+        rhs = rhs.constant_folding()
         if all([is_constant(lhs), is_constant(rhs)]):
             return binary_constant_folding('&&', lhs, rhs)
         return LogicalAndNode(lhs, rhs)
@@ -423,8 +473,10 @@ LogicalAndExpression.grammar = __equality_expression, blank, "&&", blank, __logi
 
 class LogicalOrExpression(List):
     def constant_folding(self):
-        lhs = self[0].constant_folding()
-        rhs = self[1].constant_folding()
+        lhs, rhs = repair_prefix(self[0], self[1], LogicalOrExpression)
+
+        lhs = lhs.constant_folding()
+        rhs = rhs.constant_folding()
         if all([is_constant(lhs), is_constant(rhs)]):
             return binary_constant_folding('||', lhs, rhs)
         return LogicalOrNode(lhs, rhs)
@@ -443,9 +495,3 @@ class Parser(object):
     @staticmethod
     def parse(text):
         return parse(text, Expression)
-
-while True:
-    text = input()
-    ast = Parser.parse(text)
-    print(ast)
-    print(type(ast.constant_folding()), ": ", ast.constant_folding().eval(None))
