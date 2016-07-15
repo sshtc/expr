@@ -40,7 +40,7 @@ while True:
     env = Environment()
     env.add_object('ab', 1)
     env.add_object('a', [1,[11,12,13,15],3,4,5,6])
-    env.add_object('fg', {'add': lambda x, y: x+y})
+    env.add_object('math', {'add': lambda x, y: x+y})
 
     evaluator = Evaluator(text, env)
     print(evaluator.ast())
