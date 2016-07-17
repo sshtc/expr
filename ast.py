@@ -32,6 +32,9 @@ class Constant(object):
     def __or__(self, other):
         return self.value or other.value
 
+    def __neg__(self):
+        return -self.value;
+
 
 class ArithmeticConstant(Constant):
     def __add__(self, other):
@@ -50,23 +53,23 @@ class ArithmeticConstant(Constant):
         return self.value % other.value
 
 
-class IntegerConstantNode(ArithmeticConstant):
+class IntegerConstant(ArithmeticConstant):
     def eval(self, env):
         return self.value
 
     def __repr__(self):
-        return '(IntegerConstantNode: %d)' % self.value
+        return '(IntegerConstant: %d)' % self.value
 
 
-class DecimalConstantNode(Constant):
+class DecimalConstant(Constant):
     def eval(self, env):
         return self.value
 
     def __repr__(self):
-        return '(DecimalConstantNode: %F)' % self.value
+        return '(DecimalConstant: %F)' % self.value
 
 
-class BoolConstantNode(Constant):
+class BoolConstant(Constant):
     def __init__(self, value):
         self.value = value
 
@@ -77,34 +80,34 @@ class BoolConstantNode(Constant):
         return not self.value
 
     def __repr__(self):
-        return '(BoolConstantNode: %F)' % self.value
+        return '(BoolConstant: %F)' % self.value
 
 
-class NilConstantNode(Constant):
+class NilConstant(Constant):
     def eval(self, env):
         return None
 
     def __repr__(self):
-        return '(NilConstantNode: None)'
+        return '(NilConstant: None)'
 
 
-class StringConstantNode(ArithmeticConstant):
+class StringConstant(ArithmeticConstant):
     def eval(self, env):
         return self.value
 
     def __repr__(self):
-        return '(StringConstantNode: %s)' % self.value
+        return '(StringConstant: %s)' % self.value
 
 
-class SymbolNode(str):
+class Symbol(str):
     def eval(self, env):
         return env.get_object(str(self))
 
     def __repr__(self):
-        return '(SymbolNode: %s)' % str(self)
+        return '(Symbol: %s)' % str(self)
 
 
-class MemberObjectNode(object):
+class MemberObject(object):
     def __init__(self, obj, member):
         self.obj = obj
         self.member = member
@@ -114,16 +117,16 @@ class MemberObjectNode(object):
         subscript = self.member.eval(env).value
         try:
             if isinstance(obj, dict):
-                return obj.get(subscript, NilConstantNode(None))
+                return obj.get(subscript, NilConstant(None))
         except:
             pass
-        return NilConstantNode(None)
+        return NilConstant(None)
 
     def __repr__(self):
-        return '(MemberObjectNode: %s.%s)' % (repr(self.obj), repr(self.member))
+        return '(MemberObject: %s.%s)' % (repr(self.obj), repr(self.member))
 
 
-class FunctionCallObjectNode(object):
+class FunctionCallObject(object):
     def __init__(self, function, args):
         self.function = function
         self.args = args
@@ -134,10 +137,10 @@ class FunctionCallObjectNode(object):
         return function(*args)
 
     def __repr__(self):
-        return '(FunctionCallObjectNode: %s(%s))' % (repr(self.function), repr(self.args))
+        return '(FunctionCallObject: %s(%s))' % (repr(self.function), repr(self.args))
 
 
-class SubscriptObjectNode(object):
+class SubscriptObject(object):
     def __init__(self, obj, subscript):
         self.obj = obj
         self.subscript = subscript
@@ -149,27 +152,27 @@ class SubscriptObjectNode(object):
             if isinstance(obj, list):
                 return obj[subscript]
             elif isinstance(obj, dict):
-                return obj.get(subscript, NilConstantNode(None))
+                return obj.get(subscript, NilConstant(None))
         except:
             pass
-        return NilConstantNode(None)
+        return NilConstant(None)
 
     def __repr__(self):
-        return '(SubscriptObjectNode: %s[%s])' % (repr(self.obj), repr(self.subscript))
+        return '(SubscriptObject: %s[%s])' % (repr(self.obj), repr(self.subscript))
 
 
-class MemberNode(object):
+class Member(object):
     def __init__(self, member):
         self.member = member
 
     def eval(self, env):
-        return StringConstantNode(str(self.member))
+        return StringConstant(str(self.member))
 
     def __repr__(self):
-        return "(MemberNode: %s)" % str(self.member)
+        return "(Member: %s)" % str(self.member)
 
 
-class FunctionArgsNode(object):
+class FunctionArgs(object):
     def __init__(self, args):
         self.args = args
 
@@ -177,10 +180,10 @@ class FunctionArgsNode(object):
         return [x.eval(env) for x in self.args]
 
     def __repr__(self):
-        return ','.join([str(x) for x in self.args])
+        return "(FunctionArgs: %s)" % ','.join([str(x) for x in self.args])
 
 
-class SubscriptNode(object):
+class Subscript(object):
     def __init__(self, subscript):
         self.subscript = subscript
 
@@ -188,10 +191,10 @@ class SubscriptNode(object):
         return self.subscript.eval(env)
 
     def __repr__(self):
-        return '(SubscriptNode: %s)' % repr(self.subscript)
+        return '(Subscript: %s)' % repr(self.subscript)
 
 
-class NegativeNode(object):
+class Negative(object):
     def __init__(self, value):
         self.value = value
 
@@ -199,10 +202,10 @@ class NegativeNode(object):
         return - self.value.eval(env)
 
     def __repr__(self):
-        return '(NegativeNode: -%s)' % repr(self.value)
+        return '(Negative: -%s)' % repr(self.value)
 
 
-class NotNode(object):
+class Not(object):
     def __init__(self, value):
         self.value = value
 
@@ -210,115 +213,115 @@ class NotNode(object):
         return not self.value.eval(env)
 
     def __repr__(self):
-        return '(NegativeNode: !%s)' % repr(self.value)
+        return '(Not: !%s)' % repr(self.value)
 
 
-class BinaryNode(object):
+class Binary(object):
     def __init__(self, lhs, rhs):
         self.lhs = lhs
         self.rhs = rhs
 
 
-class MultiplyNode(BinaryNode):
+class Multiply(Binary):
     def eval(self, env):
         return self.lhs.eval(env) * self.rhs.eval(env)
 
     def __repr__(self):
-        return '(MultiplyNode: %s*%s)' % (repr(self.lhs), repr(self.rhs))
+        return '(Multiply: %s*%s)' % (repr(self.lhs), repr(self.rhs))
 
 
-class DivideNode(BinaryNode):
+class Divide(Binary):
     def eval(self, env):
         return self.lhs.eval(env) / self.rhs.eval(env)
 
     def __repr__(self):
-        return '(DivideNode: %s/%s)' % (repr(self.lhs), repr(self.rhs))
+        return '(Divide: %s/%s)' % (repr(self.lhs), repr(self.rhs))
 
 
-class IntegerDivideNode(BinaryNode):
+class IntegerDivide(Binary):
     def eval(self, env):
         return self.lhs.eval(env) % self.rhs.eval(env)
 
     def __repr__(self):
-        return '(IntegerDivideNode: %s%%%s)' % (repr(self.lhs), repr(self.rhs))
+        return '(IntegerDivide: %s%%%s)' % (repr(self.lhs), repr(self.rhs))
 
 
-class AddNode(BinaryNode):
+class Add(Binary):
     def eval(self, env):
         return self.lhs.eval(env) + self.rhs.eval(env)
 
     def __repr__(self):
-        return '(AddNode: %s+%s)' % (repr(self.lhs), repr(self.rhs))
+        return '(Add: %s+%s)' % (repr(self.lhs), repr(self.rhs))
 
 
-class SubtractNode(BinaryNode):
+class Subtract(Binary):
     def eval(self, env):
         return self.lhs.eval(env) - self.rhs.eval(env)
 
     def __repr__(self):
-        return '(SubtractNode: %s-%s)' % (repr(self.lhs), repr(self.rhs))
+        return '(Subtract: %s-%s)' % (repr(self.lhs), repr(self.rhs))
 
 
-class LessOrEqualNode(BinaryNode):
+class LessOrEqual(Binary):
     def eval(self, env):
         return self.lhs.eval(env) <= self.rhs.eval(env)
 
     def __repr__(self):
-        return '(LessOrEqualNode: %s<=%s)' % (repr(self.lhs), repr(self.rhs))
+        return '(LessOrEqual: %s<=%s)' % (repr(self.lhs), repr(self.rhs))
 
 
-class GreaterOrEqualNode(BinaryNode):
+class GreaterOrEqual(Binary):
     def eval(self, env):
         return self.lhs.eval(env) >= self.rhs.eval(env)
 
     def __repr__(self):
-        return '(GreaterOrEqualNode: %s>=%s)' % (repr(self.lhs), repr(self.rhs))
+        return '(GreaterOrEqual: %s>=%s)' % (repr(self.lhs), repr(self.rhs))
 
 
-class LessThanNode(BinaryNode):
+class LessThan(Binary):
     def eval(self, env):
         return self.lhs.eval(env) < self.rhs.eval(env)
 
     def __repr__(self):
-        return '(LessThanNode: %s<%s)' % (repr(self.lhs), repr(self.rhs))
+        return '(LessThan: %s<%s)' % (repr(self.lhs), repr(self.rhs))
 
 
-class GreaterThanNode(BinaryNode):
+class GreaterThan(Binary):
     def eval(self, env):
         return self.lhs.eval(env) > self.rhs.eval(env)
 
     def __repr__(self):
-        return '(GreaterThanNode: %s>%s)' % (repr(self.lhs), repr(self.rhs))
+        return '(GreaterThan: %s>%s)' % (repr(self.lhs), repr(self.rhs))
 
 
-class EqualNode(BinaryNode):
+class Equal(Binary):
     def eval(self, env):
         print(type(self.lhs.eval(env)), type(self.rhs.eval(env)))
         return self.lhs.eval(env) == self.rhs.eval(env)
 
     def __repr__(self):
-        return '(EqualNode: %s==%s)' % (repr(self.lhs), repr(self.rhs))
+        return '(Equal: %s==%s)' % (repr(self.lhs), repr(self.rhs))
 
 
-class UnequalNode(BinaryNode):
+class Unequal(Binary):
     def eval(self, env):
         return self.lhs.eval(env) != self.rhs.eval(env)
 
     def __repr__(self):
-        return '(UnequalNode: %s!=%s)' % (repr(self.lhs), repr(self.rhs))
+        return '(Unequal: %s!=%s)' % (repr(self.lhs), repr(self.rhs))
 
 
-class LogicalAndNode(BinaryNode):
+class LogicalAnd(Binary):
     def eval(self, env):
         return self.lhs.eval(env) and self.rhs.eval(env)
 
     def __repr__(self):
-        return '(LogicalAndNode: %s&&%s)' % (repr(self.lhs), repr(self.rhs))
+        return '(LogicalAnd: %s&&%s)' % (repr(self.lhs), repr(self.rhs))
 
 
-class LogicalOrNode(BinaryNode):
+class LogicalOr(Binary):
     def eval(self, env):
         return self.lhs.eval(env) or self.rhs.eval(env)
 
     def __repr__(self):
-        return '(LogicalOrNode: %s||%s)' % (repr(self.lhs), repr(self.rhs))
+        return '(LogicalOr: %s||%s)' % (repr(self.lhs), repr(self.rhs))
