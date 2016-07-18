@@ -17,6 +17,6 @@ while True:
     try:
         evaluator = Executor(text, env)
         print(evaluator.exec())
-        print(evaluator.ast())
+        # print(evaluator.ast())
     except Exception as e:
         print(e)
