@@ -8,52 +8,8 @@ class Constant(object):
     def __init__(self, value):
         self.value = value
 
-    def __le__(self, other):
-        return self.value <= other.value
 
-    def __lt__(self, other):
-        return self.value < other.value
-
-    def __ge__(self, other):
-        return self.value >= other.value
-
-    def __gt__(self, other):
-        return self.value > other.value
-
-    def __eq__(self, other):
-        return self.value == other.value
-
-    def __ne__(self, other):
-        return self.value != other.value
-
-    def __and__(self, other):
-        return self.value and other.value
-
-    def __or__(self, other):
-        return self.value or other.value
-
-    def __neg__(self):
-        return -self.value;
-
-
-class ArithmeticConstant(Constant):
-    def __add__(self, other):
-        return self.value + other.value
-
-    def __sub__(self, other):
-        return self.value - other.value
-
-    def __mul__(self, other):
-        return self.value * other.value
-
-    def __truediv__ (self, other):
-        return self.value / other.value
-
-    def __mod__(self, other):
-        return self.value % other.value
-
-
-class IntegerConstant(ArithmeticConstant):
+class IntegerConstant(Constant):
     def eval(self, env):
         return self.value
 
@@ -91,7 +47,7 @@ class NilConstant(Constant):
         return '(NilConstant: None)'
 
 
-class StringConstant(ArithmeticConstant):
+class StringConstant(Constant):
     def eval(self, env):
         return self.value
 
@@ -107,14 +63,14 @@ class Symbol(str):
         return '(Symbol: %s)' % str(self)
 
 
-class MemberObject(object):
+class Member(object):
     def __init__(self, obj, member):
         self.obj = obj
         self.member = member
 
     def eval(self, env):
         obj = self.obj.eval(env)
-        subscript = self.member.eval(env).value
+        subscript = self.member
         try:
             if isinstance(obj, dict):
                 return obj.get(subscript, NilConstant(None))
@@ -123,24 +79,25 @@ class MemberObject(object):
         return NilConstant(None)
 
     def __repr__(self):
-        return '(MemberObject: %s.%s)' % (repr(self.obj), repr(self.member))
+        return '(Member: %s.%s)' % (repr(self.obj), repr(self.member))
 
 
-class FunctionCallObject(object):
+class FunctionCall(object):
     def __init__(self, function, args):
         self.function = function
         self.args = args
 
     def eval(self, env):
         function = self.function.eval(env)
-        args = self.args.eval(env)
+        args = [x.eval(env) for x in self.args]
+
         return function(*args)
 
     def __repr__(self):
-        return '(FunctionCallObject: %s(%s))' % (repr(self.function), repr(self.args))
+        return '(FunctionCall: %s(%s))' % (repr(self.function), repr(self.args))
 
 
-class SubscriptObject(object):
+class Subscript(object):
     def __init__(self, obj, subscript):
         self.obj = obj
         self.subscript = subscript
@@ -158,40 +115,7 @@ class SubscriptObject(object):
         return NilConstant(None)
 
     def __repr__(self):
-        return '(SubscriptObject: %s[%s])' % (repr(self.obj), repr(self.subscript))
-
-
-class Member(object):
-    def __init__(self, member):
-        self.member = member
-
-    def eval(self, env):
-        return StringConstant(str(self.member))
-
-    def __repr__(self):
-        return "(Member: %s)" % str(self.member)
-
-
-class FunctionArgs(object):
-    def __init__(self, args):
-        self.args = args
-
-    def eval(self, env):
-        return [x.eval(env) for x in self.args]
-
-    def __repr__(self):
-        return "(FunctionArgs: %s)" % ','.join([str(x) for x in self.args])
-
-
-class Subscript(object):
-    def __init__(self, subscript):
-        self.subscript = subscript
-
-    def eval(self, env):
-        return self.subscript.eval(env)
-
-    def __repr__(self):
-        return '(Subscript: %s)' % repr(self.subscript)
+        return '(Subscript: %s[%s])' % (repr(self.obj), repr(self.subscript))
 
 
 class Negative(object):
@@ -296,14 +220,13 @@ class GreaterThan(Binary):
 
 class Equal(Binary):
     def eval(self, env):
-        print(type(self.lhs.eval(env)), type(self.rhs.eval(env)))
         return self.lhs.eval(env) == self.rhs.eval(env)
 
     def __repr__(self):
         return '(Equal: %s==%s)' % (repr(self.lhs), repr(self.rhs))
 
 
-class Unequal(Binary):
+class UnEqual(Binary):
     def eval(self, env):
         return self.lhs.eval(env) != self.rhs.eval(env)
 
@@ -325,3 +248,19 @@ class LogicalOr(Binary):
 
     def __repr__(self):
         return '(LogicalOr: %s||%s)' % (repr(self.lhs), repr(self.rhs))
+
+
+class If(object):
+    def __init__(self, yes, condition, no):
+        self.yes = yes
+        self.condition = condition
+        self.no = no
+
+    def eval(self, env):
+        condition = self.condition.eval(env)
+        if condition:
+            return self.yes.eval(env)
+        return self.no.eval(env)
+
+    def __repr__(self):
+        return '(If: %s if %s else %s)' % (repr(self.yes), repr(self.condition), repr(self.no))
