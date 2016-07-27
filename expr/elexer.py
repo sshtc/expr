@@ -155,7 +155,7 @@ class Lexer(object):
         return self.__parse(peek, r'%', Token.Mod, lambda x: x, self.__parse_and)
 
     def __parse_and(self, peek):
-        return self.__parse(peek, r'&&', Token.Mod, lambda x: x, self.__parse_or)
+        return self.__parse(peek, r'&&', Token.And, lambda x: x, self.__parse_or)
 
     def __parse_or(self, peek):
         return self.__parse(peek, r'\|\|', Token.Or, lambda x: x, self.__parse_not)
